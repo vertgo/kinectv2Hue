@@ -458,11 +458,13 @@ namespace BodyBasicsWPF
                             // As long as those body objects are not disposed and not set to null in the array,
                             // those body objects will be re-used.
                             bodyFrame.GetAndRefreshBodyData(this.bodies);
+                            bool firstFound = false;
 
                             foreach (Body body in this.bodies)
                             {
                                 if (body.IsTracked)
                                 {
+                                    
                                     //this.DrawClippedEdges(body, dc);
 
                                     IReadOnlyDictionary<JointType, Joint> joints = body.Joints;
@@ -477,10 +479,36 @@ namespace BodyBasicsWPF
                                         jointPoints[jointType] = new Point(depthSpacePoint.X, depthSpacePoint.Y);
                                     }
 
+                                    if (!firstFound)
+                                    {
+                                        Joint rightShoulderJoint = joints[JointType.ShoulderRight];
+                                        Joint rightHandJoint = joints[JointType.HandRight];
+
+                                        if (rightShoulderJoint.TrackingState == TrackingState.Tracked &&
+                                            rightHandJoint.TrackingState == TrackingState.Tracked)
+                                        {
+                                            System.Diagnostics.Debug.Write("Right Shoulder");
+
+                                            CameraSpacePoint shoulderRight = rightShoulderJoint.Position;
+                                            System.Diagnostics.Debug.Write(shoulderRight.X + "," + shoulderRight.Y + "," + shoulderRight.Z);
+
+                                            System.Diagnostics.Debug.Write("Right hand:");
+
+                                            CameraSpacePoint handRight = rightHandJoint.Position;
+                                            System.Diagnostics.Debug.Write(handRight.X + "," + handRight.Y + "," + handRight.Z);
+
+                                            System.Diagnostics.Debug.Write("DONE\n");
+                                            firstFound = true; //don't need to react to the first user anymore
+                                        }
+                                    }
                                     this.DrawBody(joints, jointPoints, dc);
 
                                     this.DrawHand(body.HandLeftState, jointPoints[JointType.HandLeft], dc);
                                     this.DrawHand(body.HandRightState, jointPoints[JointType.HandRight], dc);
+
+
+
+                                    
                                 }
                             }
 
