@@ -49,6 +49,8 @@ namespace BodyBasicsWPF
         /// </summary>
         private byte[] pixels = null;
 
+        private int curSelectedLight = -1;
+
         ////
 
 
@@ -56,6 +58,8 @@ namespace BodyBasicsWPF
         /// Radius of drawn hand circles
         /// </summary>
         private const double HandSize = 30;
+
+        private const float SelectAngleMax = 0.3f;
 
         /// <summary>
         /// Radius of drawn light circles
@@ -108,13 +112,14 @@ namespace BodyBasicsWPF
         private readonly Pen inferredBonePen = new Pen(Brushes.Gray, 1);
 
         private readonly Brush lightBrush = Brushes.White;
+        private readonly Brush lightPointedBrush = Brushes.Yellow;
 
         /// <summary>
         /// Drawing group for body rendering output
         /// </summary>
         private DrawingGroup drawingGroup;
 
-        private CameraSpacePoint light1 = new CameraSpacePoint();
+        //private CameraSpacePoint light1 = new CameraSpacePoint();
 
         /// <summary>
         /// Drawing image that we will display
@@ -143,6 +148,8 @@ namespace BodyBasicsWPF
         /// </summary>
         private Body[] bodies = null;
 
+        private CameraSpacePoint[] lightPositions = new CameraSpacePoint[3];
+
         /// <summary>
         /// Width of display (depth space)
         /// </summary>
@@ -167,6 +174,7 @@ namespace BodyBasicsWPF
         /// Next time to update FPS/frame time status
         /// </summary>
         private DateTime nextStatusUpdate = DateTime.MinValue;
+        private DateTime lastSelectedTime = DateTime.MinValue;
 
         /// <summary>
         /// Number of frames since last FPS/frame time status
@@ -191,9 +199,29 @@ namespace BodyBasicsWPF
 
 
             //initialize hard coded light
-            light1.X = -0.5840531f;
-            light1.Y = 0.2366814f;
-            light1.Z = 3.56379f;
+            CameraSpacePoint light0 = new CameraSpacePoint();
+            CameraSpacePoint light1 = new CameraSpacePoint();
+            CameraSpacePoint light2 = new CameraSpacePoint();
+
+            light0.X = -1.302601f;
+            light0.Y = 0.653169f;
+            light0.Z = 2.312274f;
+
+
+            light1.X = -0.6725083f;
+            light1.Y = -0.09831079f;
+            light1.Z = 2.45966f;
+
+            light2.X = -0.01340344f;
+            light2.Y = 0.5311673f;
+            light2.Z = 2.678232f;
+
+            lightPositions[0] = light0;
+            lightPositions[1] = light1;
+            lightPositions[2] = light2;
+
+
+            //lightPositions[ 0 ] = 
 
             if (this.kinectSensor != null)
             {
@@ -378,6 +406,28 @@ namespace BodyBasicsWPF
             }
         }
 
+        private int getSelectedLight(CameraSpacePoint inShoulder, CameraSpacePoint inHand)
+        {
+            float lowestAngle = 300;
+            int curClosestLight = -1;
+            for (int i = 0; i < lightPositions.Length; i++) //hardcoded
+            {
+                float angleToLight = angleBetweenVecs(inShoulder, inHand, lightPositions[ i ] );
+                if (angleToLight < SelectAngleMax && angleToLight < lowestAngle)
+                {
+                    lowestAngle = angleToLight;
+                    curClosestLight = i;
+                }
+            }
+
+            return curClosestLight;
+        }
+
+        private void deselectLight()
+        {
+            curSelectedLight = 0;
+            lastSelectedTime = DateTime.Now;
+        }
         /// <summary>
         /// Handles the body frame data arriving from the sensor
         /// </summary>
@@ -510,10 +560,8 @@ namespace BodyBasicsWPF
                             bool firstFound = false;
 
                             //drawing lights
-                            DepthSpacePoint light1PointConverted = this.coordinateMapper.MapCameraPointToDepthSpace(light1);
-                            Point light1Point = new Point(light1PointConverted.X, light1PointConverted.Y); 
-                            this.DrawLight(light1Point, dc);
 
+                            bool light1PointedAt = false;
                             foreach (Body body in this.bodies)
                             {
                                 if (body.IsTracked)
@@ -548,20 +596,48 @@ namespace BodyBasicsWPF
                                         {
                                             //System.Diagnostics.Debug.Write("Right Shoulder");
 
-                                            CameraSpacePoint shoulderRight = rightShoulderJoint.Position;
+                                           
                                             //System.Diagnostics.Debug.Write(shoulderRight.X + "," + shoulderRight.Y + "," + shoulderRight.Z);
 
-                                            //System.Diagnostics.Debug.Write("Right hand:");
+                                            System.Diagnostics.Debug.Write("Right hand:");
 
-                                            CameraSpacePoint handRight = rightHandJoint.Position;
-                                            //System.Diagnostics.Debug.Write(handRight.X + "," + handRight.Y + "," + handRight.Z);
+
+                                            System.Diagnostics.Debug.WriteLine(rhp.X + "," + rhp.Y + "," + rhp.Z + "!!!");
 
                                             //System.Diagnostics.Debug.Write("DONE\n");
 
-                                            float angleToLight = angleBetweenVecs(rsp, rhp, light1);
+                                            //float angleToLight = angleBetweenVecs(rsp, rhp, light1);
 
-                                            System.Diagnostics.Debug.WriteLine( "Angle between hand and light:" + angleToLight);
+                                            //System.Diagnostics.Debug.WriteLine( "Angle between hand and light:" + angleToLight);
+
+                                            int newSelected = getSelectedLight(rsp, rhp);
+
+                                            if (newSelected > -1 )
+                                            {
+                                                curSelectedLight = newSelected;
+                                                lastSelectedTime = DateTime.Now;
+
+                                            }
+                                            else
+                                            {
+                                                //no light was selected and it's been more than 10 seconds from the last time you pointed at a light
+                                                if (curSelectedLight < -1 && DateTime.Now >= lastSelectedTime + TimeSpan.FromSeconds(10))
+                                                {
+                                                    deselectLight();
+                                                }
+                                            }
+
+
+                                            /*if (angleToLight < 0.3)
+                                            {
+
+                                                System.Diagnostics.Debug.WriteLine("POINTED!!!!!!");
+                                            
+                                                light1PointedAt = true;
+                                            }*/
+
                                             firstFound = true; //don't need to react to the first user anymore
+                                            
                                         }
                                     }
                                     this.DrawBody(joints, jointPoints, dc);
@@ -573,8 +649,14 @@ namespace BodyBasicsWPF
 
                                     
                                 }
+
+
                             }
 
+                            //DepthSpacePoint lightPointConverted = this.coordinateMapper.MapCameraPointToDepthSpace(light1);
+                            //Point light1Point = new Point(light1PointConverted.X, light1PointConverted.Y);
+                            //this.DrawLight(light1Point, dc, light1PointedAt);
+                            this.DrawLights(dc);
                             // prevent drawing outside of our render area
                             this.drawingGroup.ClipGeometry = new RectangleGeometry(new Rect(0.0, 0.0, this.displayWidth, this.displayHeight));
                         }
@@ -742,10 +824,24 @@ namespace BodyBasicsWPF
             }
         }
 
-        private void DrawLight(Point lightPosition, DrawingContext drawingContext)
+        private void DrawLights( DrawingContext drawingContext)
         {
-            drawingContext.DrawEllipse(this.lightBrush, null, lightPosition, LightSize, LightSize);
-                    
+            for (int i = 0; i < lightPositions.Length; i++)
+            {
+                DepthSpacePoint lightPointConverted = this.coordinateMapper.MapCameraPointToDepthSpace(lightPositions[i]);
+                Point lightPoint = new Point(lightPointConverted.X, lightPointConverted.Y);
+                //System.Diagnostics.Debug.WriteLine("light drawing:" + i + lightPoint);
+                            
+                if (i == curSelectedLight)
+                {
+
+                    drawingContext.DrawEllipse(this.lightPointedBrush, null, lightPoint, LightSize, LightSize);
+                }
+                else
+                {
+                    drawingContext.DrawEllipse(this.lightBrush, null, lightPoint, LightSize, LightSize);
+                }
+            }
 
         }
 
