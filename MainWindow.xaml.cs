@@ -17,6 +17,22 @@ namespace BodyBasicsWPF
     using System.Windows.Media.Imaging;
     using Microsoft.Kinect;
 
+    public static class ExtensionMethods
+    {
+        public static decimal Map(this decimal value, decimal fromSource, decimal toSource, decimal fromTarget, decimal toTarget)
+        {
+            return (value - fromSource) / (toSource - fromSource) * (toTarget - fromTarget) + fromTarget;
+        }
+
+        public static T Clamp<T>(this T val, T min, T max) where T : IComparable<T>
+        {
+            if (val.CompareTo(min) < 0) return min;
+            else if (val.CompareTo(max) > 0) return max;
+            else return val;
+        }
+    }
+
+
     /// <summary>
     /// Interaction logic for MainWindow
     /// </summary>
@@ -187,10 +203,29 @@ namespace BodyBasicsWPF
         private Stopwatch stopwatch = null;
 
         /// <summary>
+        /// HueLights
+        /// </summary>
+        HueLights huelights = new HueLights();
+
+        // ghetto color mapper
+        string[] numColors = new string[8];
+
+        int frame = 0;
+
+        /// <summary>
         /// Initializes a new instance of the MainWindow class.
         /// </summary>
         public MainWindow()
         {
+
+            numColors[0] = "FF0000";
+            numColors[1] = "FF7F00";
+            numColors[2] = "FFFF00";
+            numColors[3] = "00FF00";
+            numColors[4] = "0000FF";
+            numColors[5] = "4B0082";
+            numColors[6] = "8F00FF";
+            numColors[7] = "FF0000";
             // create a stopwatch for FPS calculation
             this.stopwatch = new Stopwatch();
 
@@ -425,7 +460,7 @@ namespace BodyBasicsWPF
 
         private void deselectLight()
         {
-            curSelectedLight = 0;
+            curSelectedLight = -1;
             lastSelectedTime = DateTime.Now;
         }
         /// <summary>
@@ -642,7 +677,7 @@ namespace BodyBasicsWPF
                                     }
                                     this.DrawBody(joints, jointPoints, dc);
 
-                                    this.DrawHand(body.HandLeftState, jointPoints[JointType.HandLeft], dc);
+                                    //this.DrawHand(body.HandLeftState, jointPoints[JointType.HandLeft], dc);
                                     this.DrawHand(body.HandRightState, jointPoints[JointType.HandRight], dc);
 
 
@@ -808,7 +843,56 @@ namespace BodyBasicsWPF
         /// <param name="drawingContext">drawing context to draw to</param>
         private void DrawHand(HandState handState, Point handPosition, DrawingContext drawingContext)
         {
+            //hack
+            int selectedLight = 2;// curSelectedLight + 2;
+            
+
             switch (handState)
+            {
+
+                case HandState.Closed:
+                    
+                    huelights.TurnOff(selectedLight);
+
+                    drawingContext.DrawEllipse(this.handClosedBrush, null, handPosition, HandSize, HandSize);
+                    break;
+
+                case HandState.Open:
+
+                    // turn on
+                    huelights.TurnOn(selectedLight);
+
+                    // setting the colors
+                    
+                    decimal handPosX = (decimal)handPosition.X;
+                    decimal mappedValue = handPosX.Map(100, 380, 0, 7);
+                    int pickedIndex = (int)mappedValue;
+                    pickedIndex.Clamp(0, 7);
+
+                    string hexString = "#" + numColors[pickedIndex];
+                    
+                    // draw a circle of the same color for debugging
+                    SolidColorBrush handOpenBrush = new SolidColorBrush();
+                    handOpenBrush = (SolidColorBrush)(new BrushConverter().ConvertFrom(hexString));
+                    drawingContext.DrawEllipse(handOpenBrush, null, handPosition, HandSize, HandSize);
+                    
+                    // change color
+                    huelights.ChangeHue(selectedLight, numColors[pickedIndex]);
+
+                    Debug.WriteLine(pickedIndex);
+                     
+
+                    break;
+
+                case HandState.Lasso:
+                    drawingContext.DrawEllipse(this.handLassoBrush, null, handPosition, HandSize, HandSize);
+
+                    break;
+            }
+        }
+            
+        
+        /*switch (handState)
             {
                 case HandState.Closed:
                     drawingContext.DrawEllipse(this.handClosedBrush, null, handPosition, HandSize, HandSize);
@@ -822,7 +906,7 @@ namespace BodyBasicsWPF
                     drawingContext.DrawEllipse(this.handLassoBrush, null, handPosition, HandSize, HandSize);
                     break;
             }
-        }
+        }*/
 
         private void DrawLights( DrawingContext drawingContext)
         {
