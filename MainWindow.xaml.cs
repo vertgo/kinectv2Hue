@@ -58,6 +58,11 @@ namespace BodyBasicsWPF
         private const double HandSize = 30;
 
         /// <summary>
+        /// Radius of drawn light circles
+        /// </summary>
+        private const double LightSize = 10;
+
+        /// <summary>
         /// Thickness of drawn joint lines
         /// </summary>
         private const double JointThickness = 3;
@@ -102,10 +107,14 @@ namespace BodyBasicsWPF
         /// </summary>        
         private readonly Pen inferredBonePen = new Pen(Brushes.Gray, 1);
 
+        private readonly Brush lightBrush = Brushes.White;
+
         /// <summary>
         /// Drawing group for body rendering output
         /// </summary>
         private DrawingGroup drawingGroup;
+
+        private CameraSpacePoint light1 = new CameraSpacePoint();
 
         /// <summary>
         /// Drawing image that we will display
@@ -179,6 +188,12 @@ namespace BodyBasicsWPF
 
             // for Alpha, one sensor is supported
             this.kinectSensor = KinectSensor.Default;
+
+
+            //initialize hard coded light
+            light1.X = -0.5840531f;
+            light1.Y = 0.2366814f;
+            light1.Z = 3.56379f;
 
             if (this.kinectSensor != null)
             {
@@ -256,6 +271,40 @@ namespace BodyBasicsWPF
             {
                 return this.bitmap;
             }
+        }
+        
+        /// <summary>
+        /// return a vector that extends from csp1 to csp2
+        /// </summary>
+        public CameraSpacePoint difference(CameraSpacePoint csp1, CameraSpacePoint csp2)
+        {
+            CameraSpacePoint retPoint = new CameraSpacePoint();
+            retPoint.X = csp2.X - csp1.X;
+            retPoint.Y = csp2.Y - csp1.Y;
+            retPoint.Z = csp2.Z - csp1.Z;
+            return (retPoint);
+        }
+
+        
+        /// <summary>
+        /// return a the dot product between csp1->csp2 and csp1-csp3
+        /// </summary>
+        public float dotProduct( CameraSpacePoint vec1, CameraSpacePoint vec2 )//CameraSpacePoint csp1, CameraSpacePoint csp2, CameraSpacePoint csp3)
+        {
+            return (vec1.X * vec2.X + vec1.Y * vec2.Y + vec1.Z * vec2.Z);
+        }
+
+        public float magnitude(CameraSpacePoint csp)
+        {
+            return ( (float) Math.Sqrt( Math.Pow(csp.X, 2) + Math.Pow(csp.Y, 2) + Math.Pow(csp.Z, 2 ) ) );
+        }
+
+        public float angleBetweenVecs(CameraSpacePoint csp1, CameraSpacePoint csp2, CameraSpacePoint csp3)
+        {
+            CameraSpacePoint vec1 = difference(csp1, csp2);
+            CameraSpacePoint vec2 = difference(csp1, csp3);
+
+            return ( (float) Math.Acos( dotProduct(vec1, vec2)/ ( magnitude(vec1) * magnitude( vec2) ) ) );
         }
 
         /// <summary>
@@ -460,6 +509,11 @@ namespace BodyBasicsWPF
                             bodyFrame.GetAndRefreshBodyData(this.bodies);
                             bool firstFound = false;
 
+                            //drawing lights
+                            DepthSpacePoint light1PointConverted = this.coordinateMapper.MapCameraPointToDepthSpace(light1);
+                            Point light1Point = new Point(light1PointConverted.X, light1PointConverted.Y); 
+                            this.DrawLight(light1Point, dc);
+
                             foreach (Body body in this.bodies)
                             {
                                 if (body.IsTracked)
@@ -484,20 +538,29 @@ namespace BodyBasicsWPF
                                         Joint rightShoulderJoint = joints[JointType.ShoulderRight];
                                         Joint rightHandJoint = joints[JointType.HandRight];
 
+
+                                        CameraSpacePoint rhp = rightHandJoint.Position;
+                                        CameraSpacePoint rsp = rightShoulderJoint.Position;
+
+
                                         if (rightShoulderJoint.TrackingState == TrackingState.Tracked &&
                                             rightHandJoint.TrackingState == TrackingState.Tracked)
                                         {
-                                            System.Diagnostics.Debug.Write("Right Shoulder");
+                                            //System.Diagnostics.Debug.Write("Right Shoulder");
 
                                             CameraSpacePoint shoulderRight = rightShoulderJoint.Position;
-                                            System.Diagnostics.Debug.Write(shoulderRight.X + "," + shoulderRight.Y + "," + shoulderRight.Z);
+                                            //System.Diagnostics.Debug.Write(shoulderRight.X + "," + shoulderRight.Y + "," + shoulderRight.Z);
 
-                                            System.Diagnostics.Debug.Write("Right hand:");
+                                            //System.Diagnostics.Debug.Write("Right hand:");
 
                                             CameraSpacePoint handRight = rightHandJoint.Position;
-                                            System.Diagnostics.Debug.Write(handRight.X + "," + handRight.Y + "," + handRight.Z);
+                                            //System.Diagnostics.Debug.Write(handRight.X + "," + handRight.Y + "," + handRight.Z);
 
-                                            System.Diagnostics.Debug.Write("DONE\n");
+                                            //System.Diagnostics.Debug.Write("DONE\n");
+
+                                            float angleToLight = angleBetweenVecs(rsp, rhp, light1);
+
+                                            System.Diagnostics.Debug.WriteLine( "Angle between hand and light:" + angleToLight);
                                             firstFound = true; //don't need to react to the first user anymore
                                         }
                                     }
@@ -677,6 +740,13 @@ namespace BodyBasicsWPF
                     drawingContext.DrawEllipse(this.handLassoBrush, null, handPosition, HandSize, HandSize);
                     break;
             }
+        }
+
+        private void DrawLight(Point lightPosition, DrawingContext drawingContext)
+        {
+            drawingContext.DrawEllipse(this.lightBrush, null, lightPosition, LightSize, LightSize);
+                    
+
         }
 
         /// <summary>
